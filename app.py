@@ -24,6 +24,15 @@ df_ratings["release_year"] = pd.to_numeric(df_ratings["release_year"], errors="c
 df_ratings = df_ratings.dropna(subset=["release_year"])
 valid_years = sorted([int(year) for year in df_ratings['release_year'].unique()])
 
+df_additions = df.dropna(subset=["date_added_parsed"]).copy()
+df_additions["year_month"] = df_additions["date_added_parsed"].dt.to_period("M").dt.to_timestamp()
+
+df_dir = df[["show_id", "title", "director", "type"]].copy()
+df_dir = df_dir.dropna(subset=["director"])
+df_dir["director_list"] = df_dir["director"].str.split(r",\s*")
+df_dir = df_dir.explode("director_list")
+df_dir["director_list"] = df_dir["director_list"].str.strip()
+
 columns_to_display = ["title", "type", "release_year", "rating"]
 
 pink_scale = ["#ffe6f2", "#ff4da6"]
@@ -126,6 +135,58 @@ app.layout = html.Div([
                 dcc.Graph(id='rating-pie-chart')
             ])
         ]),
+        dcc.Tab(label='Yearly Trends', children=[
+            html.Div([
+                html.H2("Titles Added Over Time", style={"textAlign": "center", "color": "black"}),
+                html.Div([
+                    html.Label("Select Date Range"),
+                    dcc.DatePickerRange(
+                        id='trend-date-range',
+                        start_date=df_additions["year_month"].min().date(),
+                        end_date=df_additions["year_month"].max().date(),
+                        display_format='YYYY-MM-DD'
+                    ),
+                    html.Label("Filter by Type", style={"marginLeft": "20px"}),
+                    dcc.Dropdown(
+                        id='trend-type',
+                        options=[{'label': t, 'value': t} for t in df_additions['type'].dropna().unique()],
+                        placeholder="Choose Movie or TV Show",
+                        style={"width": "200px", "marginLeft": "10px"}
+                    ),
+                ], style={
+                    "width": "70%",
+                    "margin": "auto",
+                    "display": "flex",
+                    "alignItems": "center",
+                    "justifyContent": "center",
+                    "gap": "20px",
+                    "paddingBottom": "20px"
+                }),
+                dcc.Graph(id='trend-line-chart')
+            ], style={"padding": "20px"})
+        ]),
+        dcc.Tab(label='Director Popularity', children=[
+            html.Div([
+                html.H2("Top 10 Directors on Netflix", style={"textAlign": "center", "color": "black"}),
+                html.Div([
+                    html.Label("Filter by Type"),
+                    dcc.Dropdown(
+                        id='director-type',
+                        options=[{'label': t, 'value': t} for t in df_dir['type'].dropna().unique()],
+                        placeholder="Choose Movie or TV Show",
+                        style={"width": "200px", "marginLeft": "10px"}
+                    ),
+                ], style={
+                    "width": "50%",
+                    "margin": "auto",
+                    "display": "flex",
+                    "alignItems": "center",
+                    "justifyContent": "center",
+                    "paddingBottom": "20px"
+                }),
+                dcc.Graph(id='director-bar-chart')
+            ], style={"padding": "20px"})
+        ]),
     ])
 ])
 
@@ -211,6 +272,79 @@ def update_rating_chart(year_index, content_type):
     fig.update_layout(
         title_font=dict(color="black", size=18),
         font=dict(color="black")
+    )
+    return fig
+
+@app.callback(
+    Output('trend-line-chart', 'figure'),
+    Input('trend-date-range', 'start_date'),
+    Input('trend-date-range', 'end_date'),
+    Input('trend-type', 'value'),
+)
+def update_trend_chart(start_date, end_date, content_type):
+    filtered = df_additions.copy()
+    if start_date:
+        filtered = filtered[filtered['year_month'] >= pd.to_datetime(start_date)]
+    if end_date:
+        filtered = filtered[filtered['year_month'] <= pd.to_datetime(end_date)]
+    if content_type:
+        filtered = filtered[filtered['type'] == content_type]
+
+    trend_counts = (
+        filtered
+        .groupby('year_month')
+        .size()
+        .reset_index(name='count')
+        .sort_values('year_month')
+    )
+
+    fig = px.line(
+        trend_counts,
+        x='year_month',
+        y='count',
+        title="Number of Titles Added per Month",
+        markers=True
+    )
+    fig.update_layout(
+        xaxis_title="Year-Month",
+        yaxis_title="Title Count",
+        title_font=dict(color="black", size=18),
+        font=dict(color="black")
+    )
+    return fig
+
+@app.callback(
+    Output('director-bar-chart', 'figure'),
+    Input('director-type', 'value'),
+)
+def update_director_chart(content_type):
+    filtered = df_dir.copy()
+    if content_type:
+        filtered = filtered[filtered['type'] == content_type]
+
+    top_directors = (
+        filtered['director_list']
+        .value_counts()
+        .nlargest(10)
+        .reset_index()
+    )
+    top_directors.columns = ['Director', 'Count']
+
+    fig = px.bar(
+        top_directors,
+        x='Count',
+        y='Director',
+        orientation='h',
+        title="Top 10 Directors on Netflix",
+        color='Count',
+        color_continuous_scale='Blues'
+    )
+    fig.update_layout(
+        yaxis=dict(autorange='reversed'),  
+        xaxis_title="Number of Titles",
+        title_font=dict(color="black", size=18),
+        font=dict(color="black"),
+        showlegend=False
     )
     return fig
 

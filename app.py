@@ -187,6 +187,38 @@ app.layout = html.Div([
                 dcc.Graph(id='director-bar-chart')
             ], style={"padding": "20px"})
         ]),
+        dcc.Tab(label='About', children=[
+            html.Div([
+                html.Div([
+                    html.Img(src='assets/logo.png', style={'width': '200px', 'margin': '20px auto', 'display': 'block'}),
+                    html.H2("About This Dashboard", style={"textAlign": "center", "color": "black"}),
+                    html.P("This dashboard provides a comprehensive analysis of Netflix's content library using various interactive visualizations. Here's what each section represents:", style={"padding": "10px 40px", "fontSize": "16px"}),
+
+                    html.Ul([
+                        html.Li([
+                            html.B("Main Dashboard: "),
+                            "Displays a choropleth map showing the number of Netflix titles available per country and a data table for browsing individual titles."
+                        ]),
+                        html.Li([
+                            html.B("Top Genres: "),
+                            "Bar chart of the top 10 most popular genres based on the selected date range and content type (Movie or TV Show)."
+                        ]),
+                        html.Li([
+                            html.B("Rating Breakdown: "),
+                            "Pie chart showing distribution of content ratings (e.g., TV-MA, PG-13) for a given release year and type."
+                        ]),
+                        html.Li([
+                            html.B("Yearly Trends: "),
+                            "Line chart visualizing how many titles were added to Netflix each month, filtered by type and date range."
+                        ]),
+                        html.Li([
+                            html.B("Director Popularity: "),
+                            "Bar chart showing the 10 most prolific directors based on the number of titles they have on Netflix, filtered by type."
+                        ])
+                    ], style={"padding": "0 40px", "fontSize": "16px"})
+                ], style={"maxWidth": "900px", "margin": "auto"})
+            ])
+        ]),
     ])
 ])
 

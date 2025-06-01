@@ -1,22 +1,10 @@
-# app.py
-
 import pandas as pd
 import plotly.express as px
 from dash import Dash, dash_table, dcc, html, Input, Output, State
 
-# ────────────────────────────────────────────────────────────────────────────────
-# 1) Load & preprocess the Netflix dataset
-# ────────────────────────────────────────────────────────────────────────────────
-
-# Replace "netflix_titles.csv" with the correct path if needed
 df = pd.read_csv("netflix_titles.csv")
+df["date_added_parsed"] = pd.to_datetime(df["date_added"], errors="coerce")
 
-# Parse 'date_added' for any future time-based filters (optional)
-df["date_added_parsed"] = pd.to_datetime(df["date_added"], format="%B %d, %Y", errors="coerce")
-
-# Create a "country" column in which each title appears once per country.
-# The original dataset has a pipe-delimited string of countries in the 'country' column.
-# We will explode that so each row represents a single title–country combination.
 df_countries = df[["show_id", "title", "country"]].copy()
 df_countries["country"] = df_countries["country"].fillna("")
 df_countries["country_list"] = df_countries["country"].str.split(",\s*")
@@ -24,29 +12,21 @@ df_countries = df_countries.explode("country_list")
 df_countries["country_list"] = df_countries["country_list"].str.strip()
 df_countries = df_countries[df_countries["country_list"] != ""]
 
-# Count how many titles appear per country
 vc = df_countries["country_list"].value_counts().sort_values(ascending=False)
-country_counts = pd.DataFrame({
-    "country": vc.index,
-    "count": vc.values
-})
+country_counts = pd.DataFrame({"country": vc.index, "count": vc.values})
 
-# ────────────────────────────────────────────────────────────────────────────────
-# 2) Create a DataTable listing all titles
-# ────────────────────────────────────────────────────────────────────────────────
+df_genre = df.copy()
+df_genre["genre"] = df_genre["listed_in"].str.split(", ")
+df_genre = df_genre.explode("genre")
 
-# We will display a subset of columns in the table
+df_ratings = df.copy()
+df_ratings["release_year"] = pd.to_numeric(df_ratings["release_year"], errors="coerce")
+df_ratings = df_ratings.dropna(subset=["release_year"])
+valid_years = sorted([int(year) for year in df_ratings['release_year'].unique()])
+
 columns_to_display = ["title", "type", "release_year", "rating"]
 
-# ────────────────────────────────────────────────────────────────────────────────
-# 3) Build the Plotly Express choropleth figure
-#    — use a pink color scale with no artificial capping
-# ────────────────────────────────────────────────────────────────────────────────
-
-# Define a simple pink gradient from very light pink to deeper pink
 pink_scale = ["#ffe6f2", "#ff4da6"]
-
-# Let Plotly automatically choose the color range so that no values are capped
 fig_country = px.choropleth(
     country_counts,
     locations="country",
@@ -65,69 +45,89 @@ fig_country.update_layout(
         lenmode="fraction",
         len=0.5,
     ),
+    title_font=dict(color="black", size=18),
+    font=dict(color="black")
 )
 
-# ────────────────────────────────────────────────────────────────────────────────
-# 4) Initialize the Dash app
-# ────────────────────────────────────────────────────────────────────────────────
+spongebob_colors = ["#FFEB3B", "#03A9F4", "#E91E63", "#9C27B0", "#FF9800", "#8BC34A", "#00BCD4", "#FFC107", "#673AB7", "#FF5722"]
 
 app = Dash(__name__)
+app.title = "Netflix Dashboard"
 
-app.layout = html.Div(
-    style={"display": "flex", "flexDirection": "row", "height": "100vh"},
-    children=[
-        # ┌───────────────────────────────────────────────────────────────────────────┐
-        # │ LEFT COLUMN: DataTable                                                 │
-        # └───────────────────────────────────────────────────────────────────────────┘
-        html.Div(
-            style={
-                "flex": "1",
-                "padding": "20px",
-                "overflowY": "auto",
-                "borderRight": "1px solid #ddd",
-            },
-            children=[
-                html.H2("Netflix Titles"),
-                dash_table.DataTable(
-                    id="titles-table",
-                    columns=[{"name": col.replace("_", " ").title(), "id": col} for col in columns_to_display],
-                    data=df.to_dict("records"),
-                    page_size=10,
-                    row_selectable="single",
-                    selected_rows=[],
-                    style_table={"overflowX": "auto"},
-                    style_cell={
-                        "minWidth": "120px",
-                        "width": "120px",
-                        "maxWidth": "180px",
-                        "whiteSpace": "normal",
-                    },
-                ),
-                html.Div(id="detail-panel", style={"marginTop": "20px"}),
-            ],
-        ),
-
-        # ┌───────────────────────────────────────────────────────────────────────────┐
-        # │ RIGHT COLUMN: Choropleth Map                                            │
-        # └───────────────────────────────────────────────────────────────────────────┘
-        html.Div(
-            style={
-                "flex": "2",
-                "padding": "20px",
-                "display": "flex",
-                "flexDirection": "column",
-            },
-            children=[
-                dcc.Graph(id="country-map", figure=fig_country),
-                # Removed instructional text as requested
-            ],
-        ),
-    ],
-)
-
-# ────────────────────────────────────────────────────────────────────────────────
-# 5) Callback to display details of a selected title
-# ────────────────────────────────────────────────────────────────────────────────
+app.layout = html.Div([
+    dcc.Tabs([
+        dcc.Tab(label='Main Dashboard', children=[
+            html.Div(style={"display": "flex", "flexDirection": "row", "height": "90vh"}, children=[
+                html.Div(style={"flex": "1", "padding": "20px", "overflowY": "auto", "borderRight": "1px solid #ddd"}, children=[
+                    html.H2("Netflix Titles"),
+                    dash_table.DataTable(
+                        id="titles-table",
+                        columns=[{"name": col.replace("_", " ").title(), "id": col} for col in columns_to_display],
+                        data=df.to_dict("records"),
+                        page_size=10,
+                        row_selectable="single",
+                        selected_rows=[],
+                        style_table={"overflowX": "auto"},
+                        style_cell={
+                            "minWidth": "120px",
+                            "width": "120px",
+                            "maxWidth": "180px",
+                            "whiteSpace": "normal",
+                        },
+                    ),
+                    html.Div(id="detail-panel", style={"marginTop": "20px"}),
+                ]),
+                html.Div(style={"flex": "2", "padding": "20px", "display": "flex", "flexDirection": "column"}, children=[
+                    dcc.Graph(id="country-map", figure=fig_country),
+                ]),
+            ])
+        ]),
+        dcc.Tab(label='Top Genres', children=[
+            html.Div([
+                html.H2("Top Netflix Genres", style={"textAlign": "center", "color": "black"}),
+                html.Div([
+                    html.Label("Select Date Range"),
+                    dcc.DatePickerRange(
+                        id='genre-date-range',
+                        start_date=df_genre['date_added_parsed'].min(),
+                        end_date=df_genre['date_added_parsed'].max(),
+                        display_format='YYYY-MM-DD'
+                    ),
+                    html.Label("Filter by Type"),
+                    dcc.Dropdown(
+                        id='genre-type',
+                        options=[{'label': i, 'value': i} for i in df_genre['type'].dropna().unique()],
+                        placeholder="Choose Movie or TV Show"
+                    ),
+                ], style={"width": "50%", "margin": "auto"}),
+                dcc.Graph(id='genre-bar-chart')
+            ])
+        ]),
+        dcc.Tab(label='Rating Breakdown', children=[
+            html.Div([
+                html.H2("Netflix Content Rating Breakdown", style={"textAlign": "center", "color": "black"}),
+                html.Div([
+                    html.Label("Select Release Year"),
+                    dcc.Slider(
+                        id='rating-year',
+                        min=0,
+                        max=len(valid_years) - 1,
+                        value=len(valid_years) - 1,
+                        marks={i: str(valid_years[i]) for i in range(len(valid_years)) if i % 5 == 0 or i == len(valid_years) - 1},
+                        step=1
+                    ),
+                    html.Label("Filter by Type"),
+                    dcc.Dropdown(
+                        id='rating-type',
+                        options=[{'label': i, 'value': i} for i in df_ratings['type'].dropna().unique()],
+                        placeholder="Choose Movie or TV Show"
+                    ),
+                ], style={"width": "60%", "margin": "auto"}),
+                dcc.Graph(id='rating-pie-chart')
+            ])
+        ]),
+    ])
+])
 
 @app.callback(
     Output("detail-panel", "children"),
@@ -137,43 +137,81 @@ app.layout = html.Div(
 def display_title_details(selected_rows, rows):
     if not selected_rows:
         return html.Div()
-
-    # Only one row is selectable at a time, so we take the first index
     idx = selected_rows[0]
     row = rows[idx]
+    return [
+        html.H3(row.get("title", "No Title")),
+        html.P([html.B("Type: "), row.get("type", "Unknown")], style={"marginBottom": "5px"}),
+        html.P([html.B("Release Year: "), row.get("release_year", "Unknown")], style={"marginBottom": "5px"}),
+        html.P([html.B("Rating: "), row.get("rating", "Unknown")], style={"marginBottom": "5px"}),
+        html.P([html.B("Duration: "), row.get("duration", "Unknown")], style={"marginBottom": "5px"}),
+        html.P([html.B("Genres: "), row.get("listed_in", "Unknown")], style={"marginBottom": "15px"}),
+        html.Div([
+            html.B("Description:"),
+            html.P(row.get("description", ""), style={"whiteSpace": "pre-wrap"}),
+        ], style={"paddingTop": "10px", "borderTop": "1px solid #ddd"}),
+    ]
 
-    detail_children = []
-    detail_children.append(html.H3(row.get("title", "No Title")))
-    detail_children.append(
-        html.P([html.B("Type: "), row.get("type", "Unknown")], style={"marginBottom": "5px"})
+@app.callback(
+    Output('genre-bar-chart', 'figure'),
+    Input('genre-date-range', 'start_date'),
+    Input('genre-date-range', 'end_date'),
+    Input('genre-type', 'value')
+)
+def update_genre_chart(start_date, end_date, content_type):
+    filtered = df_genre.copy()
+    if start_date:
+        filtered = filtered[filtered['date_added_parsed'] >= pd.to_datetime(start_date)]
+    if end_date:
+        filtered = filtered[filtered['date_added_parsed'] <= pd.to_datetime(end_date)]
+    if content_type:
+        filtered = filtered[filtered['type'] == content_type]
+    top_genres = filtered['genre'].value_counts().nlargest(10).reset_index()
+    top_genres.columns = ['Genre', 'Count']
+    colors = spongebob_colors[:len(top_genres)]
+    fig = px.bar(
+        top_genres,
+        x='Count',
+        y='Genre',
+        orientation='h',
+        title="Top Genres on Netflix",
+        color='Genre',
+        color_discrete_sequence=colors
     )
-    detail_children.append(
-        html.P([html.B("Release Year: "), row.get("release_year", "Unknown")], style={"marginBottom": "5px"})
+    fig.update_layout(
+        yaxis=dict(title=None),
+        xaxis_title="Count",
+        title_font=dict(color="black", size=18),
+        font=dict(color="black")
     )
-    detail_children.append(
-        html.P([html.B("Rating: "), row.get("rating", "Unknown")], style={"marginBottom": "5px"})
-    )
-    detail_children.append(
-        html.P([html.B("Duration: "), row.get("duration", "Unknown")], style={"marginBottom": "5px"})
-    )
-    detail_children.append(
-        html.P([html.B("Genres: "), row.get("listed_in", "Unknown")], style={"marginBottom": "15px"})
-    )
-    detail_children.append(
-        html.Div(
-            [
-                html.B("Description:"),
-                html.P(row.get("description", ""), style={"whiteSpace": "pre-wrap"}),
-            ],
-            style={"paddingTop": "10px", "borderTop": "1px solid #ddd"},
-        )
-    )
+    return fig
 
-    return detail_children
-
-# ────────────────────────────────────────────────────────────────────────────────
-# 6) Run the app (use app.run instead of app.run_server for newer Dash versions)
-# ────────────────────────────────────────────────────────────────────────────────
+@app.callback(
+    Output('rating-pie-chart', 'figure'),
+    Input('rating-year', 'value'),
+    Input('rating-type', 'value')
+)
+def update_rating_chart(year_index, content_type):
+    year = valid_years[year_index]
+    filtered = df_ratings[df_ratings['release_year'] == year]
+    if content_type:
+        filtered = filtered[filtered['type'] == content_type]
+    rating_counts = filtered['rating'].value_counts().reset_index()
+    rating_counts.columns = ['Rating', 'Count']
+    colors = spongebob_colors[:len(rating_counts)]
+    fig = px.pie(
+        rating_counts,
+        names='Rating',
+        values='Count',
+        title=f"Rating Breakdown ({year})",
+        color='Rating',
+        color_discrete_sequence=colors
+    )
+    fig.update_layout(
+        title_font=dict(color="black", size=18),
+        font=dict(color="black")
+    )
+    return fig
 
 if __name__ == "__main__":
     app.run(debug=True)

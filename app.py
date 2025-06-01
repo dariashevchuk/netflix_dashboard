@@ -91,7 +91,7 @@ app.layout = html.Div([
                         id='genre-date-range',
                         start_date=df_genre['date_added_parsed'].min(),
                         end_date=df_genre['date_added_parsed'].max(),
-                        display_format='YYYY-MM-DD'
+                        display_format='YYYY-MM-DD',
                     ),
                     html.Label("Filter by Type"),
                     dcc.Dropdown(
@@ -182,7 +182,8 @@ def update_genre_chart(start_date, end_date, content_type):
         yaxis=dict(title=None),
         xaxis_title="Count",
         title_font=dict(color="black", size=18),
-        font=dict(color="black")
+        font=dict(color="black"),
+        showlegend=False
     )
     return fig
 

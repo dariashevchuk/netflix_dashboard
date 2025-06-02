@@ -1,4 +1,4 @@
-import os
+from os import environ
 import pandas as pd
 import plotly.express as px
 from dash import Dash, dash_table, dcc, html, Input, Output, State
@@ -63,6 +63,8 @@ spongebob_colors = ["#FFEB3B", "#03A9F4", "#E91E63", "#9C27B0", "#FF9800", "#8BC
 
 app = Dash(__name__)
 app.title = "Netflix Dashboard"
+server = app.server        
+
 
 app.layout = html.Div([
     dcc.Tabs([
@@ -241,5 +243,6 @@ def update_director_chart(content_type):
     return fig
 
 if __name__ == "__main__":
+    from os import environ
     port = int(environ.get("PORT", 4000))
-    app.run_server(host="0.0.0.0", port=port, debug=True)
+    app.run(host="0.0.0.0", port=port, debug=True)

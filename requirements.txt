@@ -2,3 +2,4 @@ plotly
 dash
 pandas
 os
+gunicorn

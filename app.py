@@ -7,17 +7,17 @@ df["date_added_parsed"] = pd.to_datetime(df["date_added"], errors="coerce")
 
 df_countries = df[["show_id", "title", "country"]].copy()
 df_countries["country"] = df_countries["country"].fillna("")
-df_countries["country_list"] = df_countries["country"].str.split(",\s*")
+df_countries["country_list"] = df_countries["country"].str.split(r",\s*")
 df_countries = df_countries.explode("country_list")
 df_countries["country_list"] = df_countries["country_list"].str.strip()
 df_countries = df_countries[df_countries["country_list"] != ""]
-
 vc = df_countries["country_list"].value_counts().sort_values(ascending=False)
 country_counts = pd.DataFrame({"country": vc.index, "count": vc.values})
 
 df_genre = df.copy()
-df_genre["genre"] = df_genre["listed_in"].str.split(", ")
+df_genre["genre"] = df_genre["listed_in"].str.split(r", ")
 df_genre = df_genre.explode("genre")
+df_genre["date_added_parsed"] = pd.to_datetime(df_genre["date_added"], errors="coerce")
 
 df_ratings = df.copy()
 df_ratings["release_year"] = pd.to_numeric(df_ratings["release_year"], errors="coerce")
@@ -65,30 +65,37 @@ app.title = "Netflix Dashboard"
 
 app.layout = html.Div([
     dcc.Tabs([
+        dcc.Tab(label='About', children=[
+            html.Div([
+                html.Img(src='assets/logo.png', style={'width': '200px', 'margin': '20px auto', 'display': 'block'}),
+                html.H2("About This Dashboard", style={"textAlign": "center", "color": "black"}),
+                html.P("This dashboard provides a comprehensive analysis of Netflix's content library using various interactive visualizations. Here's what each section represents:", style={"padding": "10px 40px", "fontSize": "16px"}),
+                html.Ul([
+                    html.Li([html.B("Main Dashboard: "), "Displays a choropleth map and data table of Netflix titles." ]),
+                    html.Li([html.B("Top Genres: "), "Bar chart of the top 10 most popular genres." ]),
+                    html.Li([html.B("Rating Breakdown: "), "Pie chart showing distribution of content ratings." ]),
+                    html.Li([html.B("Yearly Trends: "), "Line chart showing titles added over time." ]),
+                    html.Li([html.B("Director Popularity: "), "Bar chart of the top 10 directors." ])
+                ], style={"padding": "0 40px", "fontSize": "16px"})
+            ], style={"maxWidth": "900px", "margin": "auto"})
+        ]),
         dcc.Tab(label='Main Dashboard', children=[
-            html.Div(style={"display": "flex", "flexDirection": "row", "height": "90vh"}, children=[
+            html.Div(style={"display": "flex", "height": "90vh"}, children=[
                 html.Div(style={"flex": "1", "padding": "20px", "overflowY": "auto", "borderRight": "1px solid #ddd"}, children=[
                     html.H2("Netflix Titles"),
                     dash_table.DataTable(
                         id="titles-table",
                         columns=[{"name": col.replace("_", " ").title(), "id": col} for col in columns_to_display],
                         data=df.to_dict("records"),
-                        page_size=10,
+                        page_size=15,
                         row_selectable="single",
                         selected_rows=[],
                         style_table={"overflowX": "auto"},
-                        style_cell={
-                            "minWidth": "120px",
-                            "width": "120px",
-                            "maxWidth": "180px",
-                            "whiteSpace": "normal",
-                        },
+                        style_cell={"minWidth": "150px", "width": "150px", "maxWidth": "200px", "whiteSpace": "normal"},
                     ),
-                    html.Div(id="detail-panel", style={"marginTop": "20px"}),
+                    html.Div(id="detail-panel", style={"marginTop": "20px"})
                 ]),
-                html.Div(style={"flex": "2", "padding": "20px", "display": "flex", "flexDirection": "column"}, children=[
-                    dcc.Graph(id="country-map", figure=fig_country),
-                ]),
+                html.Div(style={"flex": "1", "padding": "20px"}, children=[dcc.Graph(id="country-map", figure=fig_country)])
             ])
         ]),
         dcc.Tab(label='Top Genres', children=[
@@ -96,18 +103,9 @@ app.layout = html.Div([
                 html.H2("Top Netflix Genres", style={"textAlign": "center", "color": "black"}),
                 html.Div([
                     html.Label("Select Date Range"),
-                    dcc.DatePickerRange(
-                        id='genre-date-range',
-                        start_date=df_genre['date_added_parsed'].min(),
-                        end_date=df_genre['date_added_parsed'].max(),
-                        display_format='YYYY-MM-DD',
-                    ),
+                    dcc.DatePickerRange(id='genre-date-range', start_date=df_genre['date_added_parsed'].min(), end_date=df_genre['date_added_parsed'].max(), display_format='YYYY-MM-DD'),
                     html.Label("Filter by Type"),
-                    dcc.Dropdown(
-                        id='genre-type',
-                        options=[{'label': i, 'value': i} for i in df_genre['type'].dropna().unique()],
-                        placeholder="Choose Movie or TV Show"
-                    ),
+                    dcc.Dropdown(id='genre-type', options=[{'label': i, 'value': i} for i in df_genre['type'].dropna().unique()], placeholder="Choose Movie or TV Show")
                 ], style={"width": "50%", "margin": "auto"}),
                 dcc.Graph(id='genre-bar-chart')
             ])
@@ -117,20 +115,9 @@ app.layout = html.Div([
                 html.H2("Netflix Content Rating Breakdown", style={"textAlign": "center", "color": "black"}),
                 html.Div([
                     html.Label("Select Release Year"),
-                    dcc.Slider(
-                        id='rating-year',
-                        min=0,
-                        max=len(valid_years) - 1,
-                        value=len(valid_years) - 1,
-                        marks={i: str(valid_years[i]) for i in range(len(valid_years)) if i % 5 == 0 or i == len(valid_years) - 1},
-                        step=1
-                    ),
+                    dcc.Slider(id='rating-year', min=0, max=len(valid_years) - 1, value=len(valid_years) - 1, marks={i: str(valid_years[i]) for i in range(len(valid_years)) if i % 5 == 0 or i == len(valid_years) - 1}, step=1),
                     html.Label("Filter by Type"),
-                    dcc.Dropdown(
-                        id='rating-type',
-                        options=[{'label': i, 'value': i} for i in df_ratings['type'].dropna().unique()],
-                        placeholder="Choose Movie or TV Show"
-                    ),
+                    dcc.Dropdown(id='rating-type', options=[{'label': i, 'value': i} for i in df_ratings['type'].dropna().unique()], placeholder="Choose Movie or TV Show")
                 ], style={"width": "60%", "margin": "auto"}),
                 dcc.Graph(id='rating-pie-chart')
             ])
@@ -140,28 +127,10 @@ app.layout = html.Div([
                 html.H2("Titles Added Over Time", style={"textAlign": "center", "color": "black"}),
                 html.Div([
                     html.Label("Select Date Range"),
-                    dcc.DatePickerRange(
-                        id='trend-date-range',
-                        start_date=df_additions["year_month"].min().date(),
-                        end_date=df_additions["year_month"].max().date(),
-                        display_format='YYYY-MM-DD'
-                    ),
+                    dcc.DatePickerRange(id='trend-date-range', start_date=df_additions["year_month"].min().date(), end_date=df_additions["year_month"].max().date(), display_format='YYYY-MM-DD'),
                     html.Label("Filter by Type", style={"marginLeft": "20px"}),
-                    dcc.Dropdown(
-                        id='trend-type',
-                        options=[{'label': t, 'value': t} for t in df_additions['type'].dropna().unique()],
-                        placeholder="Choose Movie or TV Show",
-                        style={"width": "200px", "marginLeft": "10px"}
-                    ),
-                ], style={
-                    "width": "70%",
-                    "margin": "auto",
-                    "display": "flex",
-                    "alignItems": "center",
-                    "justifyContent": "center",
-                    "gap": "20px",
-                    "paddingBottom": "20px"
-                }),
+                    dcc.Dropdown(id='trend-type', options=[{'label': t, 'value': t} for t in df_additions['type'].dropna().unique()], placeholder="Choose Movie or TV Show", style={"width": "200px", "marginLeft": "10px"})
+                ], style={"width": "70%", "margin": "auto", "display": "flex", "alignItems": "center", "justifyContent": "center", "gap": "20px", "paddingBottom": "20px"}),
                 dcc.Graph(id='trend-line-chart')
             ], style={"padding": "20px"})
         ]),
@@ -170,62 +139,18 @@ app.layout = html.Div([
                 html.H2("Top 10 Directors on Netflix", style={"textAlign": "center", "color": "black"}),
                 html.Div([
                     html.Label("Filter by Type"),
-                    dcc.Dropdown(
-                        id='director-type',
-                        options=[{'label': t, 'value': t} for t in df_dir['type'].dropna().unique()],
-                        placeholder="Choose Movie or TV Show",
-                        style={"width": "200px", "marginLeft": "10px"}
-                    ),
-                ], style={
-                    "width": "50%",
-                    "margin": "auto",
-                    "display": "flex",
-                    "alignItems": "center",
-                    "justifyContent": "center",
-                    "paddingBottom": "20px"
-                }),
+                    dcc.Dropdown(id='director-type', options=[{'label': t, 'value': t} for t in df_dir['type'].dropna().unique()], placeholder="Choose Movie or TV Show", style={"width": "200px", "marginLeft": "10px"})
+                ], style={"width": "50%", "margin": "auto", "display": "flex", "alignItems": "center", "justifyContent": "center", "paddingBottom": "20px"}),
                 dcc.Graph(id='director-bar-chart')
             ], style={"padding": "20px"})
-        ]),
-        dcc.Tab(label='About', children=[
-            html.Div([
-                html.Div([
-                    html.Img(src='assets/logo.png', style={'width': '200px', 'margin': '20px auto', 'display': 'block'}),
-                    html.H2("About This Dashboard", style={"textAlign": "center", "color": "black"}),
-                    html.P("This dashboard provides a comprehensive analysis of Netflix's content library using various interactive visualizations. Here's what each section represents:", style={"padding": "10px 40px", "fontSize": "16px"}),
-
-                    html.Ul([
-                        html.Li([
-                            html.B("Main Dashboard: "),
-                            "Displays a choropleth map showing the number of Netflix titles available per country and a data table for browsing individual titles."
-                        ]),
-                        html.Li([
-                            html.B("Top Genres: "),
-                            "Bar chart of the top 10 most popular genres based on the selected date range and content type (Movie or TV Show)."
-                        ]),
-                        html.Li([
-                            html.B("Rating Breakdown: "),
-                            "Pie chart showing distribution of content ratings (e.g., TV-MA, PG-13) for a given release year and type."
-                        ]),
-                        html.Li([
-                            html.B("Yearly Trends: "),
-                            "Line chart visualizing how many titles were added to Netflix each month, filtered by type and date range."
-                        ]),
-                        html.Li([
-                            html.B("Director Popularity: "),
-                            "Bar chart showing the 10 most prolific directors based on the number of titles they have on Netflix, filtered by type."
-                        ])
-                    ], style={"padding": "0 40px", "fontSize": "16px"})
-                ], style={"maxWidth": "900px", "margin": "auto"})
-            ])
-        ]),
+        ])
     ])
 ])
 
 @app.callback(
     Output("detail-panel", "children"),
     Input("titles-table", "selected_rows"),
-    State("titles-table", "data"),
+    State("titles-table", "data")
 )
 def display_title_details(selected_rows, rows):
     if not selected_rows:
@@ -239,10 +164,7 @@ def display_title_details(selected_rows, rows):
         html.P([html.B("Rating: "), row.get("rating", "Unknown")], style={"marginBottom": "5px"}),
         html.P([html.B("Duration: "), row.get("duration", "Unknown")], style={"marginBottom": "5px"}),
         html.P([html.B("Genres: "), row.get("listed_in", "Unknown")], style={"marginBottom": "15px"}),
-        html.Div([
-            html.B("Description:"),
-            html.P(row.get("description", ""), style={"whiteSpace": "pre-wrap"}),
-        ], style={"paddingTop": "10px", "borderTop": "1px solid #ddd"}),
+        html.Div([html.B("Description:"), html.P(row.get("description", ""), style={"whiteSpace": "pre-wrap"})], style={"paddingTop": "10px", "borderTop": "1px solid #ddd"})
     ]
 
 @app.callback(
@@ -262,22 +184,8 @@ def update_genre_chart(start_date, end_date, content_type):
     top_genres = filtered['genre'].value_counts().nlargest(10).reset_index()
     top_genres.columns = ['Genre', 'Count']
     colors = spongebob_colors[:len(top_genres)]
-    fig = px.bar(
-        top_genres,
-        x='Count',
-        y='Genre',
-        orientation='h',
-        title="Top Genres on Netflix",
-        color='Genre',
-        color_discrete_sequence=colors
-    )
-    fig.update_layout(
-        yaxis=dict(title=None),
-        xaxis_title="Count",
-        title_font=dict(color="black", size=18),
-        font=dict(color="black"),
-        showlegend=False
-    )
+    fig = px.bar(top_genres, x='Count', y='Genre', orientation='h', title="Top Genres on Netflix", color='Genre', color_discrete_sequence=colors)
+    fig.update_layout(yaxis=dict(title=None), xaxis_title="Count", title_font=dict(color="black", size=18), font=dict(color="black"), showlegend=False)
     return fig
 
 @app.callback(
@@ -293,25 +201,15 @@ def update_rating_chart(year_index, content_type):
     rating_counts = filtered['rating'].value_counts().reset_index()
     rating_counts.columns = ['Rating', 'Count']
     colors = spongebob_colors[:len(rating_counts)]
-    fig = px.pie(
-        rating_counts,
-        names='Rating',
-        values='Count',
-        title=f"Rating Breakdown ({year})",
-        color='Rating',
-        color_discrete_sequence=colors
-    )
-    fig.update_layout(
-        title_font=dict(color="black", size=18),
-        font=dict(color="black")
-    )
+    fig = px.pie(rating_counts, names='Rating', values='Count', title=f"Rating Breakdown ({year})", color='Rating', color_discrete_sequence=colors)
+    fig.update_layout(title_font=dict(color="black", size=18), font=dict(color="black"))
     return fig
 
 @app.callback(
     Output('trend-line-chart', 'figure'),
     Input('trend-date-range', 'start_date'),
     Input('trend-date-range', 'end_date'),
-    Input('trend-type', 'value'),
+    Input('trend-type', 'value')
 )
 def update_trend_chart(start_date, end_date, content_type):
     filtered = df_additions.copy()
@@ -321,63 +219,24 @@ def update_trend_chart(start_date, end_date, content_type):
         filtered = filtered[filtered['year_month'] <= pd.to_datetime(end_date)]
     if content_type:
         filtered = filtered[filtered['type'] == content_type]
-
-    trend_counts = (
-        filtered
-        .groupby('year_month')
-        .size()
-        .reset_index(name='count')
-        .sort_values('year_month')
-    )
-
-    fig = px.line(
-        trend_counts,
-        x='year_month',
-        y='count',
-        title="Number of Titles Added per Month",
-        markers=True
-    )
-    fig.update_layout(
-        xaxis_title="Year-Month",
-        yaxis_title="Title Count",
-        title_font=dict(color="black", size=18),
-        font=dict(color="black")
-    )
+    monthly_counts = filtered.groupby('year_month').size().reset_index(name='Count')
+    fig = px.line(monthly_counts, x='year_month', y='Count', title="Titles Added Per Month", markers=True)
+    fig.update_layout(xaxis_title="Month", yaxis_title="Number of Titles", title_font=dict(color="black", size=18), font=dict(color="black"))
     return fig
 
 @app.callback(
     Output('director-bar-chart', 'figure'),
-    Input('director-type', 'value'),
+    Input('director-type', 'value')
 )
 def update_director_chart(content_type):
     filtered = df_dir.copy()
     if content_type:
         filtered = filtered[filtered['type'] == content_type]
-
-    top_directors = (
-        filtered['director_list']
-        .value_counts()
-        .nlargest(10)
-        .reset_index()
-    )
-    top_directors.columns = ['Director', 'Count']
-
-    fig = px.bar(
-        top_directors,
-        x='Count',
-        y='Director',
-        orientation='h',
-        title="Top 10 Directors on Netflix",
-        color='Count',
-        color_continuous_scale='Blues'
-    )
-    fig.update_layout(
-        yaxis=dict(autorange='reversed'),  
-        xaxis_title="Number of Titles",
-        title_font=dict(color="black", size=18),
-        font=dict(color="black"),
-        showlegend=False
-    )
+    director_counts = filtered['director_list'].value_counts().nlargest(10).reset_index()
+    director_counts.columns = ['Director', 'Count']
+    colors = spongebob_colors[:len(director_counts)]
+    fig = px.bar(director_counts, x='Count', y='Director', orientation='h', title="Top 10 Directors on Netflix", color='Director', color_discrete_sequence=colors)
+    fig.update_layout(yaxis=dict(title=None), xaxis_title="Count", title_font=dict(color="black", size=18), font=dict(color="black"), showlegend=False)
     return fig
 
 if __name__ == "__main__":

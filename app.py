@@ -1,3 +1,4 @@
+import os
 import pandas as pd
 import plotly.express as px
 from dash import Dash, dash_table, dcc, html, Input, Output, State
@@ -240,5 +241,5 @@ def update_director_chart(content_type):
     return fig
 
 if __name__ == "__main__":
-    port = int(os.environ.get("PORT", 10000))
+    port = int(environ.get("PORT", 4000))
     app.run_server(host="0.0.0.0", port=port, debug=True)
